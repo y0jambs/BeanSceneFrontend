@@ -1,0 +1,12 @@
+Unzip the project in your user folder on your PC
+Open the Project folder in Visual Studio Code 
+run 
+npm install
+//install all the packages
+npm install react-native-eject
+//will build node_modules folder 
+react-native eject 
+//will build ios and Android folder
+react-native link 
+//will link all components to be used by Android and ios react-native run-android 
+npx react-native run-android
