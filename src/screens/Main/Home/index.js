@@ -14,80 +14,96 @@ import Card from './items/Card';
 
 const Home = ({navigation}) => {
   const [userType, setUserType] = useState('');
+
   useEffect(() => {
     AsyncStorage.getItem('user_type').then(res => {
       setUserType(res);
-      console.log(res);
+      console.log('USER TYPE:', res);
     });
-  });
+  }, []); 
+
   const onLogout = () => {
-    AsyncStorage.removeItem('user_type').then(res => {
-      AsyncStorage.removeItem('user_id').then(res =>
+    AsyncStorage.removeItem('user_type').then(() => {
+      AsyncStorage.removeItem('user_id').then(() =>
         navigation.navigate('AuthStack'),
       );
-      navigation.navigate('AuthStack');
     });
   };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
         <Header title="Home" />
         <View style={styles.card}>
+          {/* PLACE ORDER: Manager + Staff + Admin (everyone) */}
           <Card
             text="Place Order"
             family="AntDesign"
             name="search1"
             onPress={() => {
-              if (userType === 'manager' || userType === 'waiter staff') {
+              if (
+                userType === 'manager' ||
+                userType === 'staff' ||
+                userType === 'admin'
+              ) {
                 navigation.navigate('placeOrder');
               } else {
                 Alert.alert('Alert', "You don't have access");
               }
             }}
           />
+
+          {/* VIEW REPORT: Manager + Admin */}
           <Card
             text="View Report"
             family="Octicons"
             name="report"
             onPress={() => {
-              if (userType === 'waiter staff' || userType === 'kitchen staff') {
-                Alert.alert('Alert', "You don't have access");
-              } else {
+              if (userType === 'manager' || userType === 'admin') {
                 navigation.navigate('viewReport');
+              } else {
+                Alert.alert('Alert', "You don't have access");
               }
             }}
           />
 
+          {/* MANAGE STAFF: Admin only */}
           <Card
             text="Manage Staff"
             family="Ionicons"
             name="person-outline"
             onPress={() => {
-              if (userType === 'manager') {
+              if (userType === 'admin') {
                 navigation.navigate('manageStaff');
               } else {
                 Alert.alert('Alert', "You don't have access");
               }
             }}
           />
+
+          {/* VIEW ORDER: everyone can view */}
           <Card
             text="View Order"
             family="Fontisto"
             name="preview"
             onPress={() => navigation.navigate('viewOrder')}
           />
+
+          {/* MANAGE MENU: Manager + Admin */}
           <Card
             text="Manage Menu"
             family="Fontisto"
             name="preview"
             onPress={() => {
-              if (userType === 'manager') {
+              if (userType === 'manager' || userType === 'admin') {
                 navigation.navigate('manageMenu');
               } else {
                 Alert.alert('Alert', "You don't have access");
               }
             }}
           />
+
+          {/* LOG OUT */}
           <Card
             text="Log Out"
             family="Fontisto"
@@ -99,6 +115,7 @@ const Home = ({navigation}) => {
     </SafeAreaView>
   );
 };
+
 const styles = ScaledSheet.create({
   container: {
     flex: 1,
@@ -112,4 +129,5 @@ const styles = ScaledSheet.create({
     justifyContent: 'space-between',
   },
 });
+
 export default Home;

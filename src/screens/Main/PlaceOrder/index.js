@@ -7,6 +7,7 @@ import {
   Image,
   ScrollView,
   Alert,
+  AsyncStorage,
 } from 'react-native';
 import React, {useEffect, useState} from 'react';
 import {
@@ -24,10 +25,16 @@ import CustomButton from '../../../common/components/CustomButton';
 import {getAllCategory, getDish, orderCheckout} from '../../../services/Api';
 import DropDownPicker from 'react-native-dropdown-picker';
 import {api} from '../../../util/config';
-const PlaceOrder = ({navigation}) => {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState('');
-  const [items, setItems] = useState([
+
+// ---------- NEW AREA/TABLE CONSTANTS ----------
+const AREA_ITEMS = [
+  {label: 'Main', value: 'Main'},
+  {label: 'Outside', value: 'Outside'},
+  {label: 'Balcony', value: 'Balcony'},
+];
+
+const TABLES_BY_AREA = {
+  Main: [
     {label: 'M1', value: 'M1'},
     {label: 'M2', value: 'M2'},
     {label: 'M3', value: 'M3'},
@@ -38,10 +45,8 @@ const PlaceOrder = ({navigation}) => {
     {label: 'M8', value: 'M8'},
     {label: 'M9', value: 'M9'},
     {label: 'M10', value: 'M10'},
-  ]);
-  const [open2, setOpen2] = useState(false);
-  const [value2, setValue2] = useState('');
-  const [items2, setItems2] = useState([
+  ],
+  Outside: [
     {label: 'O1', value: 'O1'},
     {label: 'O2', value: 'O2'},
     {label: 'O3', value: 'O3'},
@@ -52,10 +57,8 @@ const PlaceOrder = ({navigation}) => {
     {label: 'O8', value: 'O8'},
     {label: 'O9', value: 'O9'},
     {label: 'O10', value: 'O10'},
-  ]);
-  const [open3, setOpen3] = useState(false);
-  const [value3, setValue3] = useState('');
-  const [items3, setItems3] = useState([
+  ],
+  Balcony: [
     {label: 'B1', value: 'B1'},
     {label: 'B2', value: 'B2'},
     {label: 'B3', value: 'B3'},
@@ -66,7 +69,28 @@ const PlaceOrder = ({navigation}) => {
     {label: 'B8', value: 'B8'},
     {label: 'B9', value: 'B9'},
     {label: 'B10', value: 'B10'},
-  ]);
+  ],
+};
+
+// ---------- COMPONENT ----------
+const PlaceOrder = ({navigation}) => {
+  // Area / table state
+  const [areaOpen, setAreaOpen] = useState(false);
+  const [area, setArea] = useState('Main'); // default area
+
+  const [tableOpen, setTableOpen] = useState(false);
+  const [table, setTable] = useState(null); // e.g. 'M3'
+
+  // Customer name
+  const [customerName, setCustomerName] = useState('');
+
+  // Existing state
+  const [categories, setCategories] = useState([]);
+  const [slectedCategory, setSelectedCategory] = useState('');
+  const [restaurant, setRestaurant] = useState([]);
+  const [order, setOrder] = useState([]);
+
+  // Load categories + dishes
   useEffect(() => {
     getAllCategory()
       .then(res => {
@@ -82,27 +106,29 @@ const PlaceOrder = ({navigation}) => {
       .catch(e => console.log(e));
   }, []);
 
-  const [categories, setCategories] = useState([]);
+  // Load customer name from storage
+  useEffect(() => {
+    AsyncStorage.getItem('user_name').then(name => {
+      if (name) {
+        setCustomerName(name);
+      }
+    });
+  }, []);
 
-  const [slectedCategory, setSelectedCategory] = useState('');
-  const [restaurant, setRestaurant] = useState([]);
-  const [order, setOrder] = useState([]);
   const onSelectCategory = category => {
     console.log('category', category);
     setSelectedCategory(category.name);
     console.log('category Name', slectedCategory);
-    // console.log(restaurantList);
-    // console.log(category);
   };
+
   const getCatgeoryNameById = id => {
     let category = categories.filter(a => a.id == id);
-    // console.log(id);
-    // console.log(category);
     if (category.length > 0) {
       return category[0].name;
     }
     return '';
   };
+
   function buildFormData(formData, data, parentKey) {
     if (
       data &&
@@ -122,72 +148,64 @@ const PlaceOrder = ({navigation}) => {
       formData.append(parentKey, value);
     }
   }
+
   const TakeOrder = item => {
+    if (!table) {
+      Alert.alert('Table', 'Please select a table before adding items.');
+      return;
+    }
+
     console.log('item', item);
     const data = {
       item,
-      Main: value,
-      Outside: value2,
-      Balcony: value3,
+      table, // selected table code, e.g. 'M3'
+      area, // Main / Outside / Balcony
       status: 'inprogress',
     };
     setOrder([...order, data]);
     console.log('order', order);
     Alert.alert('Cart', 'Item Added to Cart');
-    // const payload = {
-    //   order: orders,
-    // };
-    // Alert.alert('Place Order', 'Do you confirm his Order', [
-    //   {
-    //     text: 'No',
-    //     onPress: () => console.log('Cancel Pressed'),
-    //     style: 'cancel',
-    //   },
-    //   {
-    //     text: 'Yes',
-    //     onPress: () => {
-    //       placeOrder(payload)
-    //         .then(res => Alert.alert('Order', 'Order added successfully'))
-    //         .catch(e => console.log('Error', e));
-    //     },
-    //     // navigation.navigate('viewOrder', {
-    //     //   data: item,
-    //     // }),
-    //   },
-    // ]);
   };
+
   const placeOrder = () => {
     if (order.length == 0) {
       alert('Please Select Order');
-    } else {
-      const orders = JSON.stringify(order);
-      console.log('order', order);
-
-      const payload = {
-        order: orders,
-      };
-      console.log('payload', payload);
-      Alert.alert('Place Order', 'Do you Confirm This Order', [
-        {
-          text: 'No',
-          onPress: () => console.log('Cancel Pressed'),
-          style: 'cancel',
-        },
-        {
-          text: 'Yes',
-          onPress: () => {
-            orderCheckout(payload)
-              .then(res => Alert.alert('Order', 'Order added successfully'))
-              .catch(e => console.log('Error', e));
-          },
-
-          // navigation.navigate('viewOrder', {
-          //   data: item,
-          // }),
-        },
-      ]);
+      return;
     }
+
+    if (!table) {
+      alert('Please select a table');
+      return;
+    }
+
+    const orders = JSON.stringify(order);
+    console.log('order', order);
+
+    const payload = {
+      order: orders,
+      customerName: customerName,
+      orderDateTime: new Date().toISOString(),
+      tableRef: table, // send table to backend
+      area: area,
+    };
+    console.log('payload', payload);
+    Alert.alert('Place Order', 'Do you Confirm This Order', [
+      {
+        text: 'No',
+        onPress: () => console.log('Cancel Pressed'),
+        style: 'cancel',
+      },
+      {
+        text: 'Yes',
+        onPress: () => {
+          orderCheckout(payload)
+            .then(res => Alert.alert('Order', 'Order added successfully'))
+            .catch(e => console.log('Error', e));
+        },
+      },
+    ]);
   };
+
   const renderCategory = () => {
     const renderItem = ({item}) => {
       return (
@@ -257,89 +275,72 @@ const PlaceOrder = ({navigation}) => {
             marginTop={20}
             fontFamily={fonts.bold}
           />
+
+          {/* AREA DROPDOWN */}
           <View style={{marginTop: 15}}>
             <CustomText
-              label="Main"
+              label="Area"
               color={colors.midBlue}
               fontSize={15}
               container={{marginBottom: verticalScale(15)}}
               fontFamily={fonts.medium}
             />
             <DropDownPicker
-              open={open}
-              value={value}
-              items={items}
+              open={areaOpen}
+              value={area}
+              items={AREA_ITEMS}
               listMode="SCROLLVIEW"
               style={{
-                marginBottom: open ? verticalScale(140) : verticalScale(15),
+                marginBottom: areaOpen ? verticalScale(35) : verticalScale(15),
                 height: verticalScale(41),
                 borderRadius: 5,
               }}
               containerStyle={{}}
               dropDownDirection="BOTTOM"
-              placeholder={<CustomText label="Main" color="#c8c8c8" />}
+              placeholder={<CustomText label="Select area" color="#c8c8c8" />}
               labelStyle={styles.textStyle}
-              setOpen={setOpen}
-              setValue={setValue}
-              setItems={setItems}
-            />
-          </View>
-          <View style={{marginTop: 15}}>
-            <CustomText
-              label="Outside"
-              color={colors.midBlue}
-              fontSize={15}
-              container={{marginBottom: verticalScale(15)}}
-              fontFamily={fonts.medium}
-            />
-            <DropDownPicker
-              open={open2}
-              value={value2}
-              items={items2}
-              listMode="SCROLLVIEW"
-              style={{
-                marginBottom: open ? verticalScale(35) : verticalScale(15),
-                height: verticalScale(41),
-                borderRadius: 5,
+              setOpen={setAreaOpen}
+              setValue={callback => {
+                const newArea = callback(area);
+                setArea(newArea);
+                setTable(null); // clear table when area changes
               }}
-              containerStyle={{}}
-              dropDownDirection="TOP"
-              placeholder={<CustomText label="Outside" color="#c8c8c8" />}
-              labelStyle={styles.textStyle}
-              setOpen={setOpen2}
-              setValue={setValue2}
-              setItems={setItems2}
+              setItems={() => {}}
             />
           </View>
+
+          {/* TABLE DROPDOWN */}
           <View style={{marginTop: 15}}>
             <CustomText
-              label="Balcony"
+              label="Table"
               color={colors.midBlue}
               fontSize={15}
               container={{marginBottom: verticalScale(15)}}
               fontFamily={fonts.medium}
             />
             <DropDownPicker
-              open={open3}
-              value={value3}
-              items={items3}
+              open={tableOpen}
+              value={table}
+              items={TABLES_BY_AREA[area]}
               listMode="SCROLLVIEW"
               style={{
-                marginBottom: open ? verticalScale(35) : verticalScale(15),
+                marginBottom: tableOpen ? verticalScale(35) : verticalScale(15),
                 height: verticalScale(41),
                 borderRadius: 5,
               }}
               containerStyle={{}}
               dropDownDirection="BOTTOM"
-              placeholder={<CustomText label="Balcony" color="#c8c8c8" />}
+              placeholder={<CustomText label="Select table" color="#c8c8c8" />}
               labelStyle={styles.textStyle}
-              setOpen={setOpen3}
-              setValue={setValue3}
-              setItems={setItems3}
+              setOpen={setTableOpen}
+              setValue={setTable}
+              setItems={() => {}}
             />
           </View>
         </View>
+
         {renderCategory()}
+
         <View style={{marginTop: verticalScale(15)}}>
           <CustomText
             label={restaurant.length > 3 ? `All Dishes` : `Dishes`}
@@ -348,6 +349,7 @@ const PlaceOrder = ({navigation}) => {
             container={{marginHorizontal: scale(20)}}
           />
         </View>
+
         <ScrollView>
           <View style={{marginHorizontal: scale(20)}}>
             {restaurant.length == 0 ? (
@@ -367,9 +369,7 @@ const PlaceOrder = ({navigation}) => {
                   key={i}>
                   <Image
                     source={{
-                      uri: item.file
-                        ? `${api}:5000/static/${item.file}`
-                        : 'hello',
+                      uri: item.file ? `${api}/static/${item.file}` : undefined,
                     }}
                     style={{
                       height: '50%',
@@ -386,7 +386,7 @@ const PlaceOrder = ({navigation}) => {
                       <CustomText label="Name:" fontFamily={fonts.medium} />
                       <CustomText label={`   ${item.name}`} />
                     </View>
-                    <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                    <View style={{flexDirection: 'row', alignItems: 'container'}}>
                       <CustomText
                         label="Description:"
                         fontFamily={fonts.medium}
@@ -439,8 +439,8 @@ const PlaceOrder = ({navigation}) => {
                     <Image
                       source={{
                         uri: item.file
-                          ? `${api}:5000/static/${item.file}`
-                          : 'hello',
+                          ? `${api}/static/${item.file}`
+                          : undefined,
                       }}
                       style={{
                         height: '50%',
@@ -512,6 +512,8 @@ const PlaceOrder = ({navigation}) => {
     </SafeAreaView>
   );
 };
+
+// ---------- STYLES ----------
 const styles = ScaledSheet.create({
   container: {
     flex: 1,
@@ -524,4 +526,5 @@ const styles = ScaledSheet.create({
     color: colors.lightBlue,
   },
 });
+
 export default PlaceOrder;

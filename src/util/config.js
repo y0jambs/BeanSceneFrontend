@@ -1,2 +1,2 @@
-export let api = 'http://192.168.1.143';
+export let api = 'https://beanscenebackend.onrender.com';
 export const config = {BASE_URL: 'https://beanscenebackend.onrender.com/api'};
