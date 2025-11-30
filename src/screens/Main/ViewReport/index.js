@@ -1,171 +1,224 @@
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
-  Text,
   SafeAreaView,
-  TouchableOpacity,
   ScrollView,
   Alert,
 } from 'react-native';
-import React, {useEffect, useState} from 'react';
-import {scale, ScaledSheet, verticalScale} from 'react-native-size-matters';
+import { scale, ScaledSheet, verticalScale } from 'react-native-size-matters';
+
 import colors from '../../../util/colors';
 import Header from '../../../common/components/Header';
 import CustomButton from '../../../common/components/CustomButton';
 import CustomText from '../../../common/components/CustomText';
 import fonts from '../../../assets/fonts';
-import WeeklyBtn from './molecules/WeeklyBtn';
-import {deleteOrder, getAllOrder, updateOrder} from '../../../services/Api';
 import Icons from '../../../common/components/Icons';
 
-const ViewReport = ({navigation}) => {
-  const [tab, setTab] = useState(false);
-  const [data, setData] = useState([]);
+import { getOrders, updateOrder, deleteOrder } from '../../../services/Api';
+
+const ViewReport = ({ navigation }) => {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // --- Load orders from backend ---
+  const fetchOrders = () => {
+    setLoading(true);
+    getOrders()
+      .then(res => {
+        // API returns an array of order objects
+        setOrders(res.data || []);
+      })
+      .catch(err => {
+        console.log('Error fetching orders:', err);
+        Alert.alert('Error', 'Could not load orders.');
+      })
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    getAllOrder()
-      .then(res => {
-        const json = res.data;
-
-        setData(json);
-      })
-      .catch(e => console.log('Error', e));
+    fetchOrders();
   }, []);
-  const getOrder = () => {
-    getAllOrder()
-      .then(res => {
-        const json = res.data;
 
-        setData(json);
-      })
-      .catch(e => console.log('Error', e));
-  };
-  const updateStatsu = (ID, id) => {
-    const objData = [];
-    data.map(x => {
-      const parsedData = JSON.parse(x.order);
-      let new_data = {};
-      new_data.id = x.id;
-      if (x.id == id && x.status == 'inprogress') {
-        new_data.status = 'completed';
-        parsedData.filter(i => (i.status = 'completed'));
-      } else if (x.id == id && x.status == 'completed') {
-        new_data.status = 'inprogress';
-        parsedData.filter(i => (i.status = 'inprogress'));
-      } else {
-        new_data.status = x.status;
-      }
-      new_data.order = JSON.stringify(parsedData);
-      objData.push(new_data);
-    });
-    setData(objData);
-    updateOrder(ID, objData)
-      .then(res => {
-        console.log('Your order status is updated', res);
-      })
-      .catch(e => console.log('errr', e));
+  // --- Summary counts for the top of the screen ---
+  const { totalOrders, inProgressCount, completedCount } = useMemo(() => {
+    const total = orders.length;
+    const inProg = orders.filter(o => o.status === 'inprogress').length;
+    const completed = orders.filter(o => o.status === 'completed').length;
 
-    alert('Your order status is updated');
+    return {
+      totalOrders: total,
+      inProgressCount: inProg,
+      completedCount: completed,
+    };
+  }, [orders]);
+
+  // --- Toggle order status between inprogress / completed ---
+  const toggleStatus = order => {
+    const current = order.status || 'inprogress';
+    const newStatus = current === 'inprogress' ? 'completed' : 'inprogress';
+
+    // Optimistic UI update
+    setOrders(prev =>
+      prev.map(o =>
+        o.id === order.id ? { ...o, status: newStatus } : o,
+      ),
+    );
+
+    updateOrder(order.id, { status: newStatus })
+      .then(() => {
+        console.log('Order status updated');
+      })
+      .catch(err => {
+        console.log('Error updating order:', err);
+        Alert.alert('Error', 'Could not update order status.');
+        // revert if backend fails
+        setOrders(prev =>
+          prev.map(o =>
+            o.id === order.id ? { ...o, status: current } : o,
+          ),
+        );
+      });
   };
+
+  const confirmDelete = orderId => {
+    Alert.alert('Delete', 'Do you want to delete this order?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Yes',
+        onPress: () => {
+          deleteOrder(orderId)
+            .then(() => {
+              setOrders(prev => prev.filter(o => o.id !== orderId));
+            })
+            .catch(err => {
+              console.log('Error deleting order:', err);
+              Alert.alert('Error', 'Could not delete order.');
+            });
+        },
+      },
+    ]);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
         <Header icon title="View Report" onPress={() => navigation.goBack()} />
-        <View style={{flexDirection: 'row', alignItems: 'center', margin: 20}}>
+
+        {/* Note */}
+        <View style={styles.noteRow}>
           <CustomText label="Note:" fontFamily={fonts.bold} />
           <CustomText
-            label="Tab Current Status to Update order Status"
-            textStyle={{marginLeft: 10}}
+            label=" Tap Current Status to update order status"
+            textStyle={{ marginLeft: 4 }}
           />
         </View>
-        <View style={{marginHorizontal: scale(20)}}>
+
+        {/* Summary row */}
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryBox}>
+            <CustomText
+              label="Total Orders"
+              fontFamily={fonts.bold}
+              fontSize={verticalScale(11)}
+            />
+            <CustomText
+              label={String(totalOrders)}
+              fontFamily={fonts.bold}
+              fontSize={verticalScale(16)}
+              color={colors.lightBlue}
+            />
+          </View>
+
+          <View style={styles.summaryBox}>
+            <CustomText
+              label="In Progress"
+              fontFamily={fonts.bold}
+              fontSize={verticalScale(11)}
+            />
+            <CustomText
+              label={String(inProgressCount)}
+              fontFamily={fonts.bold}
+              fontSize={verticalScale(16)}
+              color={colors.lightBlue}
+            />
+          </View>
+
+          <View style={styles.summaryBox}>
+            <CustomText
+              label="Completed"
+              fontFamily={fonts.bold}
+              fontSize={verticalScale(11)}
+            />
+            <CustomText
+              label={String(completedCount)}
+              fontFamily={fonts.bold}
+              fontSize={verticalScale(16)}
+              color={colors.lightBlue}
+            />
+          </View>
+        </View>
+
+        <View style={styles.content}>
           <CustomText
             label="Order Status"
             fontSize={verticalScale(13)}
             fontFamily={fonts.bold}
-            container={{marginVertical: verticalScale(10)}}
+            container={{ marginVertical: verticalScale(10) }}
           />
-          {data?.length === 0 ? (
-            <CustomText label="Order Empty" />
+
+          {loading ? (
+            <CustomText label="Loading orders..." />
+          ) : orders.length === 0 ? (
+            <CustomText label="No orders found." />
           ) : (
-            data?.map((item, i) => {
-              const {order} = item;
-              const jsonOrder = JSON.parse(order);
-              console.log('JSONORder', item.id);
-              return (
-                <View key={i} style={{}}>
-                  <View
-                    style={{
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      fontSize: 15,
-                      borderTopWidth: 1,
-                      width: '100%',
-                      paddingTop: verticalScale(10),
-                    }}>
-                    <CustomText
-                      label={`Order ${i + 1}`}
-                      fontFamily={fonts.medium}
-                    />
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      Alert.alert(
-                        'Delete',
-                        'Do You want to delete this order',
-                        [
-                          {
-                            text: 'No',
-                            style: 'cancel',
-                          },
-                          {
-                            text: 'Yes',
-                            onPress: () => {
-                              deleteOrder(item.id)
-                                .then(res => {
-                                  console.log(res.data);
-                                  getOrder();
-                                })
-                                .catch(e => console.log('error', e));
-                            },
-                          },
-                        ],
-                      );
-                    }}>
+            orders.map((item, index) => (
+              <View key={item.id || index} style={styles.orderBlock}>
+                <View style={styles.orderHeader}>
+                  <CustomText
+                    label={`Order ${index + 1}`}
+                    fontFamily={fonts.medium}
+                  />
+                  <View style={styles.deleteIconWrapper}>
                     <Icons
                       family="AntDesign"
                       name="delete"
                       size={20}
                       color="red"
+                      onPress={() => confirmDelete(item.id)}
                     />
-                  </TouchableOpacity>
-                  <View style={{marginBottom: verticalScale(15)}}>
-                    {jsonOrder.slice(0, 1).map(i => {
-                      console.log('000000000000', i.id);
-                      return (
-                        <View key={i} style={{}}>
-                          <View
-                            style={{
-                              flexDirection: 'row',
-                              marginTop: 20,
-                              alignItems: 'center',
-                            }}>
-                            <CustomButton
-                              title="Current Status"
-                              fontFamily={fonts.bold}
-                              onPress={() => updateStatsu(order.id, item.id)}
-                            />
-                            <CustomText
-                              label={`${i.status}`}
-                              textStyle={{marginLeft: scale(20)}}
-                            />
-                          </View>
-                        </View>
-                      );
-                    })}
                   </View>
                 </View>
-              );
-            })
+
+                <CustomText
+                  label={`Customer: ${item.customerName || 'N/A'}`}
+                  color={colors.lightBlue}
+                />
+                <CustomText
+                  label={`Table: ${item.tableRef || 'N/A'}`}
+                  color={colors.lightBlue}
+                />
+                <CustomText
+                  label={`Area: ${item.area || 'N/A'}`}
+                  color={colors.lightBlue}
+                />
+                <CustomText
+                  label={`Date/Time: ${item.orderDateTime || 'N/A'}`}
+                  color={colors.lightBlue}
+                />
+
+                <View style={styles.statusRow}>
+                  <CustomButton
+                    title="Current Status"
+                    fontFamily={fonts.bold}
+                    onPress={() => toggleStatus(item)}
+                  />
+                  <CustomText
+                    label={item.status || 'inprogress'}
+                    textStyle={{ marginLeft: scale(20) }}
+                  />
+                </View>
+              </View>
+            ))
           )}
         </View>
       </ScrollView>
@@ -177,6 +230,53 @@ const styles = ScaledSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
+  },
+  noteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: scale(20),
+    marginTop: verticalScale(10),
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: scale(20),
+    marginTop: verticalScale(15),
+  },
+  summaryBox: {
+    flex: 1,
+    marginHorizontal: scale(4),
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: scale(8),
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.lightBlue,
+    backgroundColor: '#F5FAFB',
+    alignItems: 'center',
+  },
+  content: {
+    marginHorizontal: scale(20),
+    marginTop: verticalScale(10),
+  },
+  orderBlock: {
+    borderTopWidth: 1,
+    borderColor: '#ddd',
+    paddingTop: verticalScale(10),
+    marginBottom: verticalScale(15),
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: verticalScale(8),
+  },
+  deleteIconWrapper: {
+    padding: 4,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    marginTop: verticalScale(15),
+    alignItems: 'center',
   },
 });
 
