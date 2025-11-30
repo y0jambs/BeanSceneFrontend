@@ -1,194 +1,186 @@
-import {View, Text, SafeAreaView, ScrollView, Alert} from 'react-native';
-import React, {useEffect, useState} from 'react';
-import colors from '../../../util/colors';
-import Header from '../../../common/components/Header';
-import {moderateScale, scale, verticalScale} from 'react-native-size-matters';
-import CustomText from '../../../common/components/CustomText';
-import fonts from '../../../assets/fonts';
-import CustomButton from '../../../common/components/CustomButton';
-import {orderCheckout} from '../../../services/Api';
+import {
+  View,
+  Text,
+  SafeAreaView,
+  ScrollView,
+  Alert,
+  TouchableOpacity,
+} from "react-native";
+import React, { useState } from "react";
+import colors from "../../../util/colors";
+import Header from "../../../common/components/Header";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+import CustomText from "../../../common/components/CustomText";
+import fonts from "../../../assets/fonts";
+import CustomButton from "../../../common/components/CustomButton";
+import { orderCheckout } from "../../../services/Api";
 
-const Cart = ({navigation, route}) => {
-  const order = route.params;
-  const [laoder, setLoader] = useState(false);
-  useEffect(() => {
-    // console.log('OOOOOOOOOOOOOO', order);
-  }, []);
-  const placeOrder = () => {
-    if (order?.order.length === 0) {
-      alert('Cart is empty');
-    } else {
-      const orders = JSON.stringify(order.order);
-      console.log('order', order);
-      const payload = {order: orders, status: 'inprogress'};
-      console.log('payload', payload);
-      setLoader(true);
+const Cart = ({ navigation, route }) => {
+  const { order, onReturn } = route.params;
 
-      orderCheckout(payload)
-        .then(res => Alert.alert('Order', 'Order added successfully'))
-        .catch(e => console.log('Error', e))
-        .finally(() => setLoader(false));
-    }
+  const [cartItems, setCartItems] = useState(order);
+  const [loader, setLoader] = useState(false);
+
+  // REMOVE ONE ITEM
+  const removeItem = (index) => {
+    const updated = [...cartItems];
+    updated.splice(index, 1);
+    setCartItems(updated);
+    onReturn(updated);
   };
+
+  // CLEAR ENTIRE CART
+  const clearCart = () => {
+    Alert.alert(
+      "Clear Cart",
+      "Are you sure you want to remove all items?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          onPress: () => {
+            setCartItems([]);
+            onReturn([]);   // 🔥 IMPORTANT FIX
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const placeOrder = () => {
+    if (cartItems.length === 0) return alert("Cart is empty");
+
+    const first = cartItems[0];
+    const payload = {
+      order: cartItems,
+      customerName: first.customerName || "Guest",
+      orderDateTime: new Date().toISOString(),
+      tableRef: first.table,
+      area: first.area,
+      status: "inprogress",
+    };
+
+    setLoader(true);
+
+    orderCheckout(payload)
+      .then(() => {
+        Alert.alert("Success", "Order placed!");
+        setCartItems([]);
+        onReturn([]);
+        setTimeout(() => navigation.goBack(), 500);
+      })
+      .catch(() => Alert.alert("Error", "Could not place order"))
+      .finally(() => setLoader(false));
+  };
+
+  const total = cartItems.reduce(
+    (sum, item) => sum + parseFloat(item.item.price),
+    0
+  );
+
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: colors.white}}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.white }}>
       <ScrollView>
         <Header title="Cart" icon onPress={() => navigation.goBack()} />
 
-        {order.order.slice(0, 1).map(item => {
-          return (
-            <>
-              <View
-                style={{
-                  marginHorizontal: scale(20),
-                  marginTop: verticalScale(20),
-                }}>
-                <CustomText label="Sitting Place" fontFamily={fonts.bold} />
-              </View>
-              {item.Balcony.length == 0 ? null : (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    marginHorizontal: scale(20),
-                    alignItems: 'center',
-                    marginTop: verticalScale(15),
-                  }}>
-                  <CustomText label="Balcony" fontFamily={fonts.bold} />
-                  <Text
-                    style={{
-                      marginLeft: scale(20),
-                      fontFamily: fonts.regular,
-                      color: colors.lightBlue,
-                      fontSize: moderateScale(12),
-                    }}>
-                    {item?.Balcony}
-                  </Text>
-                </View>
-              )}
-              {item.Main.length == 0 ? null : (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    marginHorizontal: scale(20),
-                    alignItems: 'center',
-                    marginTop: verticalScale(15),
-                  }}>
-                  <CustomText label="Main" fontFamily={fonts.bold} />
-                  <Text
-                    style={{
-                      marginLeft: scale(20),
-                      fontFamily: fonts.regular,
-                      color: colors.lightBlue,
-                      fontSize: moderateScale(12),
-                    }}>
-                    {item?.Main}
-                  </Text>
-                </View>
-              )}
-              {item.Outside.length == 0 ? null : (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    marginHorizontal: scale(20),
-                    alignItems: 'center',
-                    marginTop: verticalScale(15),
-                  }}>
-                  <CustomText label="Outside" fontFamily={fonts.bold} />
-                  <Text
-                    style={{
-                      marginLeft: scale(20),
-                      fontFamily: fonts.regular,
-                      color: colors.lightBlue,
-                      fontSize: moderateScale(12),
-                    }}>
-                    {item?.Outside}
-                  </Text>
-                </View>
-              )}
-            </>
-          );
-        })}
-        {order?.order.length == 0 ? (
+        {cartItems.length > 0 && (
+          <View style={{ marginHorizontal: scale(20), marginTop: 20 }}>
+            <CustomText label="Sitting" fontFamily={fonts.bold} />
+            <CustomText label={`Area: ${cartItems[0].area}`} />
+            <CustomText label={`Table: ${cartItems[0].table}`} />
+          </View>
+        )}
+
+        {cartItems.length === 0 ? (
           <View
             style={{
-              flex: 1,
               marginTop: verticalScale(40),
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}>
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
             <CustomText label="Your Cart is Empty" />
           </View>
         ) : (
-          order?.order.map(item => {
-            const add = Number(item.item.price[0]);
-            const add2 = Number(item.item.price[1]);
-            const total = add + add2;
+          cartItems.map((cart, index) => (
+            <View
+              key={index}
+              style={{
+                marginHorizontal: scale(20),
+                marginTop: 15,
+                borderBottomWidth: 1,
+                paddingBottom: 10,
+                borderColor: colors.bocColor,
+              }}
+            >
+              <CustomText label="Dish Name" fontFamily={fonts.bold} />
+              <CustomText label={cart.item.name} />
 
-            console.log('Cart Itemsss', item.item);
-            return (
-              <>
-                <View
-                  style={{
-                    marginHorizontal: scale(20),
-                    marginTop: verticalScale(15),
-                    borderBottomWidth: 1,
-                    paddingBottom: verticalScale(10),
-                    borderColor: colors.bocColor,
-                  }}>
-                  <View>
-                    <CustomText label="Dish Name" fontFamily={fonts.bold} />
-                    <CustomText label={item.item.name} />
+              <CustomText
+                style={{ marginTop: 10 }}
+                label="Price"
+                fontFamily={fonts.bold}
+              />
+              <CustomText label={`$${cart.item.price}`} />
 
-                    <View style={{marginTop: verticalScale(10)}} />
-
-                    <View style={{marginTop: verticalScale(10)}} />
-
-                    <CustomText label="Dish Price" fontFamily={fonts.bold} />
-                    <CustomText label={`$${item.item.price}`} />
-                  </View>
-                </View>
-              </>
-            );
-          })
+              <TouchableOpacity
+                onPress={() => removeItem(index)}
+                style={{
+                  marginTop: 8,
+                  alignSelf: "flex-end",
+                  backgroundColor: "red",
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  borderRadius: 5,
+                }}
+              >
+                <Text style={{ color: "#fff" }}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          ))
         )}
-        <View
-          style={{
-            marginHorizontal: scale(20),
-            marginTop: verticalScale(20),
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-          <CustomText
-            label="Total Price"
-            fontFamily={fonts.bold}
-            fontSize={moderateScale(15)}
-          />
-          <Text
-            style={{
-              fontFamily: fonts.medium,
-              color: colors.lightBlue,
-              marginLeft: 20,
-              fontSize: moderateScale(15),
-            }}>
-            $
-            {order?.order?.reduce((total, cartItem) => {
-              console.log('total', cartItem.item.price);
-              return parseInt(total) + parseInt(cartItem.item.price);
-            }, 0)}
-          </Text>
-        </View>
-        <CustomButton
-          width="90%"
-          alignSelf="center"
-          title="Place Order"
-          onPress={placeOrder}
-          loading={laoder}
-          containerStyle={{
-            marginTop: verticalScale(30),
-            marginBottom: verticalScale(30),
-          }}
-        />
+
+        {cartItems.length > 0 && (
+          <>
+            <View
+              style={{
+                marginHorizontal: scale(20),
+                marginTop: 20,
+                flexDirection: "row",
+                justifyContent: "center",
+              }}
+            >
+              <CustomText label="Total:" fontFamily={fonts.bold} />
+              <Text style={{ marginLeft: 8, color: colors.midBlue }}>
+                ${total}
+              </Text>
+            </View>
+
+            <CustomButton
+              title="Clear Cart"
+              onPress={clearCart}
+              containerStyle={{
+                marginTop: 10,
+                backgroundColor: "red",
+                width: "60%",
+                alignSelf: "center",
+              }}
+            />
+
+            <CustomButton
+              title="Place Order"
+              loading={loader}
+              onPress={placeOrder}
+              containerStyle={{
+                marginTop: 20,
+                marginBottom: 30,
+                width: "90%",
+                alignSelf: "center",
+              }}
+            />
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

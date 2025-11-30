@@ -1,39 +1,90 @@
+import React, { useEffect, useState } from "react";
 import {
   Alert,
-  AsyncStorage,
   SafeAreaView,
   ScrollView,
-  Text,
   View,
-} from 'react-native';
-import React, {useEffect, useState} from 'react';
-import {verticalScale, ScaledSheet} from 'react-native-size-matters';
-import colors from '../../../util/colors';
-import Header from '../../../common/components/Header';
-import Card from './items/Card';
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ScaledSheet } from "react-native-size-matters";
 
-const Home = ({navigation}) => {
-  const [userType, setUserType] = useState('');
+import colors from "../../../util/colors";
+import Header from "../../../common/components/Header";
+import CustomText from "../../../common/components/CustomText";
+import fonts from "../../../assets/fonts";
+import Card from "./items/Card";
 
+const Home = ({ navigation }) => {
+  const [userType, setUserType] = useState("");
+  const [userName, setUserName] = useState("");
+
+  // ------------------------------------------------------
+  // LOAD USER INFO FROM STORAGE
+  // ------------------------------------------------------
   useEffect(() => {
-    AsyncStorage.getItem('user_type').then(res => {
-      setUserType(res);
-      console.log('USER TYPE:', res);
-    });
-  }, []); 
+    const loadUser = async () => {
+      try {
+        const [type, name] = await Promise.all([
+          AsyncStorage.getItem("user_type"),
+          AsyncStorage.getItem("user_name"),
+        ]);
 
-  const onLogout = () => {
-    AsyncStorage.removeItem('user_type').then(() => {
-      AsyncStorage.removeItem('user_id').then(() =>
-        navigation.navigate('AuthStack'),
-      );
-    });
+        if (type) setUserType(type);
+        if (name) setUserName(name);
+
+        console.log("USER TYPE:", type);
+      } catch (e) {
+        console.log("Error loading user from storage:", e);
+      }
+    };
+
+    loadUser();
+  }, []);
+
+  // ------------------------------------------------------
+  // LOGOUT
+  // ------------------------------------------------------
+  const onLogout = async () => {
+    try {
+      await AsyncStorage.multiRemove([
+        "user_type",
+        "user_id",
+        "user_name",
+        "user_email",
+      ]);
+      navigation.navigate("AuthStack");
+    } catch (e) {
+      console.log("Error clearing storage on logout:", e);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
         <Header title="Home" />
+
+        {/* WELCOME BANNER */}
+        <View style={styles.welcomeContainer}>
+          <CustomText
+            label={
+              userName
+                ? `Welcome, ${userName}`
+                : "Welcome to Bean Scene"
+            }
+            fontFamily={fonts.bold}
+            fontSize={18}
+          />
+          {userType ? (
+            <CustomText
+              label={`Role: ${userType}`}
+              fontFamily={fonts.medium}
+              color={colors.grey}
+              container={{ marginTop: 4 }}
+            />
+          ) : null}
+        </View>
+
+        {/* MENU CARDS */}
         <View style={styles.card}>
           {/* PLACE ORDER: Manager + Staff + Admin (everyone) */}
           <Card
@@ -42,13 +93,13 @@ const Home = ({navigation}) => {
             name="search1"
             onPress={() => {
               if (
-                userType === 'manager' ||
-                userType === 'staff' ||
-                userType === 'admin'
+                userType === "manager" ||
+                userType === "staff" ||
+                userType === "admin"
               ) {
-                navigation.navigate('placeOrder');
+                navigation.navigate("placeOrder");
               } else {
-                Alert.alert('Alert', "You don't have access");
+                Alert.alert("Alert", "You don't have access");
               }
             }}
           />
@@ -59,10 +110,10 @@ const Home = ({navigation}) => {
             family="Octicons"
             name="report"
             onPress={() => {
-              if (userType === 'manager' || userType === 'admin') {
-                navigation.navigate('viewReport');
+              if (userType === "manager" || userType === "admin") {
+                navigation.navigate("viewReport");
               } else {
-                Alert.alert('Alert', "You don't have access");
+                Alert.alert("Alert", "You don't have access");
               }
             }}
           />
@@ -73,10 +124,10 @@ const Home = ({navigation}) => {
             family="Ionicons"
             name="person-outline"
             onPress={() => {
-              if (userType === 'admin') {
-                navigation.navigate('manageStaff');
+              if (userType === "admin") {
+                navigation.navigate("manageStaff");
               } else {
-                Alert.alert('Alert', "You don't have access");
+                Alert.alert("Alert", "You don't have access");
               }
             }}
           />
@@ -86,7 +137,7 @@ const Home = ({navigation}) => {
             text="View Order"
             family="Fontisto"
             name="preview"
-            onPress={() => navigation.navigate('viewOrder')}
+            onPress={() => navigation.navigate("viewOrder")}
           />
 
           {/* MANAGE MENU: Manager + Admin */}
@@ -95,10 +146,10 @@ const Home = ({navigation}) => {
             family="Fontisto"
             name="preview"
             onPress={() => {
-              if (userType === 'manager' || userType === 'admin') {
-                navigation.navigate('manageMenu');
+              if (userType === "manager" || userType === "admin") {
+                navigation.navigate("manageMenu");
               } else {
-                Alert.alert('Alert', "You don't have access");
+                Alert.alert("Alert", "You don't have access");
               }
             }}
           />
@@ -121,12 +172,16 @@ const styles = ScaledSheet.create({
     flex: 1,
     backgroundColor: colors.white,
   },
+  welcomeContainer: {
+    marginHorizontal: "20@s",
+    marginTop: "15@vs",
+  },
   card: {
-    marginHorizontal: '20@s',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: '20@vs',
-    justifyContent: 'space-between',
+    marginHorizontal: "20@s",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: "20@vs",
+    justifyContent: "space-between",
   },
 });
 

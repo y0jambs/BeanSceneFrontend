@@ -1,7 +1,6 @@
-import axios from 'axios';
-import {config} from '../util/config';
+import axios from "axios";
 
 export default axios.create({
-  baseURL: config.BASE_URL,
-  responseType: 'json',
+  baseURL: "https://beanscenebackend.onrender.com/api",
+  timeout: 10000,
 });
