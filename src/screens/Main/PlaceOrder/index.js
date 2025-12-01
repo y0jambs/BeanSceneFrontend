@@ -117,7 +117,7 @@ const PlaceOrder = ({ navigation }) => {
     };
 
     setOrder((prev) => [...prev, entry]);
-    Alert.alert("✔ Added", `${item.name} added to cart`);
+    Alert.alert("Added", `${item.name} added to cart`);
   };
 
   // ----------------------------------------------------

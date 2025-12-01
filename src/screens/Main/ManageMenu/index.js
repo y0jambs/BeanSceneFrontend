@@ -22,6 +22,7 @@ import fonts from "../../../assets/fonts";
 import CustomButton from "../../../common/components/CustomButton";
 import CustomInput from "../../../common/components/CustomInput";
 import DropDownPicker from "react-native-dropdown-picker";
+import { api } from "../../../util/config"; // ✅ same as PlaceOrder
 
 // API
 import {
@@ -49,15 +50,17 @@ const ManageMenu = ({ navigation }) => {
   // ---------------------
   const [dishList, setDishList] = useState([]);
 
+  // align field names with backend / PlaceOrder
   const [dishData, setDishData] = useState({
     name: "",
     description: "",
     price: "",
-    flags: "",
+    dietary_flags: "",
     availability: "",
-    image: null,         // this will store dishImage for edit mode
+    file: null, // filename from backend
   });
 
+  // use category NAME (string) for consistency with PlaceOrder
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [openCatDropdown, setOpenCatDropdown] = useState(false);
 
@@ -70,7 +73,7 @@ const ManageMenu = ({ navigation }) => {
   const loadCategories = () => {
     setCatLoader(true);
     getAllCategory()
-      .then((res) => setCategoryList(res.data))
+      .then((res) => setCategoryList(res.data ?? []))
       .finally(() => setCatLoader(false));
   };
 
@@ -79,9 +82,8 @@ const ManageMenu = ({ navigation }) => {
   // ---------------------
   const loadDishes = () => {
     setDishLoader(true);
-
     getDish()
-      .then((res) => setDishList(res.data))
+      .then((res) => setDishList(res.data ?? []))
       .finally(() => setDishLoader(false));
   };
 
@@ -112,6 +114,8 @@ const ManageMenu = ({ navigation }) => {
   // EDIT CATEGORY
   // ---------------------
   const handleEditCategory = () => {
+    if (!editingCategoryId) return;
+
     editCategory(editingCategoryId, { category: categoryName })
       .then(() => {
         Alert.alert("Success", "Updated!");
@@ -132,9 +136,11 @@ const ManageMenu = ({ navigation }) => {
       {
         text: "Yes",
         onPress: () =>
-          deleteCategory(id).then(() => {
-            loadCategories();
-          }),
+          deleteCategory(id)
+            .then(() => {
+              loadCategories();
+            })
+            .catch(() => Alert.alert("Error", "Delete failed")),
       },
     ]);
   };
@@ -150,7 +156,7 @@ const ManageMenu = ({ navigation }) => {
 
     const payload = {
       ...dishData,
-      category: selectedCategory,
+      category: selectedCategory, // category NAME
     };
 
     addDish(payload)
@@ -160,9 +166,9 @@ const ManageMenu = ({ navigation }) => {
           name: "",
           description: "",
           price: "",
-          flags: "",
+          dietary_flags: "",
           availability: "",
-          image: null,
+          file: null,
         });
         setSelectedCategory(null);
         loadDishes();
@@ -177,6 +183,8 @@ const ManageMenu = ({ navigation }) => {
   const [editDishMode, setEditDishMode] = useState(false);
 
   const handleEditDish = () => {
+    if (!editingDishId) return;
+
     const payload = {
       ...dishData,
       category: selectedCategory,
@@ -187,6 +195,15 @@ const ManageMenu = ({ navigation }) => {
         Alert.alert("Updated", "Dish updated");
         setEditDishMode(false);
         setEditingDishId(null);
+        setDishData({
+          name: "",
+          description: "",
+          price: "",
+          dietary_flags: "",
+          availability: "",
+          file: null,
+        });
+        setSelectedCategory(null);
         loadDishes();
       })
       .catch(() => Alert.alert("Error", "Update failed"));
@@ -201,9 +218,11 @@ const ManageMenu = ({ navigation }) => {
       {
         text: "Yes",
         onPress: () =>
-          deleteDish(id).then(() => {
-            loadDishes();
-          }),
+          deleteDish(id)
+            .then(() => {
+              loadDishes();
+            })
+            .catch(() => Alert.alert("Error", "Delete failed")),
       },
     ]);
   };
@@ -297,14 +316,19 @@ const ManageMenu = ({ navigation }) => {
 
         {dishLoader ? (
           <ActivityIndicator color={colors.midBlue} />
+        ) : dishList.length === 0 ? (
+          <CustomText
+            label="No dishes found"
+            color={colors.red}
+            container={{ marginLeft: scale(20), marginTop: 10 }}
+          />
         ) : (
           dishList.map((dish) => (
             <View key={dish.id} style={styles.dishCard}>
-              
-              {/* IMAGE FIXED HERE */}
-              {dish.dishImage ? (
+              {/* IMAGE - now consistent with PlaceOrder */}
+              {dish.file ? (
                 <Image
-                  source={{ uri: dish.dishImage }}
+                  source={{ uri: `${api}/static/${dish.file}` }}
                   style={{ width: "100%", height: 140, borderRadius: 8 }}
                 />
               ) : (
@@ -327,12 +351,13 @@ const ManageMenu = ({ navigation }) => {
                     setDishData({
                       name: dish.name,
                       description: dish.description,
-                      price: dish.price,
-                      flags: dish.flags,
-                      availability: dish.availability,
-                      image: dish.dishImage,   // FIX HERE
+                      price: dish.price?.toString?.() ?? `${dish.price}`,
+                      dietary_flags: dish.dietary_flags ?? "",
+                      availability: dish.availability ?? "",
+                      file: dish.file ?? null,
                     });
-                    setSelectedCategory(dish.category);
+                    // category stored as name string
+                    setSelectedCategory(dish.category ?? null);
                   }}
                   style={{ marginRight: 12 }}
                 >
@@ -340,16 +365,28 @@ const ManageMenu = ({ navigation }) => {
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => handleDeleteDish(dish.id)}>
-                  <Icons family="EvilIcons" name="trash" size={22} color="red" />
+                  <Icons
+                    family="EvilIcons"
+                    name="trash"
+                    size={22}
+                    color="red"
+                  />
                 </TouchableOpacity>
               </View>
 
               <View style={{ marginTop: 10 }}>
                 <CustomText label={`Name:  ${dish.name}`} />
                 <CustomText label={`Description:  ${dish.description}`} />
-                <CustomText label={`Dietary:  ${dish.flags}`} />
+                <CustomText
+                  label={`Dietary:  ${dish.dietary_flags ?? "None"}`}
+                />
                 <CustomText label={`Price:  $${dish.price}`} />
-                <CustomText label={`Available:  ${dish.availability}`} />
+                <CustomText
+                  label={`Available:  ${dish.availability ?? "Unknown"}`}
+                />
+                <CustomText
+                  label={`Category:  ${dish.category ?? "Unassigned"}`}
+                />
               </View>
             </View>
           ))
@@ -376,19 +413,28 @@ const ManageMenu = ({ navigation }) => {
             placeholder="Price"
             value={dishData.price}
             onChangeText={(e) => setDishData({ ...dishData, price: e })}
+            keyboardType="numeric"
           />
 
-          {/* UPLOAD IMAGE BUTTON (not implemented yet) */}
+          {/* UPLOAD IMAGE BUTTON (still to be wired up to picker / uploader) */}
           <CustomButton
             title="Upload Image"
             containerStyle={{ width: "60%", alignSelf: "center" }}
+            onPress={() => {
+              Alert.alert(
+                "Not Implemented",
+                "Image upload not wired up yet in this screen."
+              );
+            }}
           />
 
           <CustomInput
             withLabel="Dietary Flags"
             placeholder="Vegan, Gluten Free, etc."
-            value={dishData.flags}
-            onChangeText={(e) => setDishData({ ...dishData, flags: e })}
+            value={dishData.dietary_flags}
+            onChangeText={(e) =>
+              setDishData({ ...dishData, dietary_flags: e })
+            }
           />
 
           <CustomText
@@ -404,7 +450,7 @@ const ManageMenu = ({ navigation }) => {
             value={selectedCategory}
             items={categoryList.map((cat) => ({
               label: cat.category,
-              value: cat.id,
+              value: cat.category, // ✅ use name so it matches PlaceOrder filtering
             }))}
             setOpen={setOpenCatDropdown}
             setValue={setSelectedCategory}

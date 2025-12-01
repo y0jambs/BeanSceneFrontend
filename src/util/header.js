@@ -9,3 +9,4 @@ export const headers3 = () => {
 export const headers2 = () => {
   return (API.defaults.headers.post['Content-Type'] = 'multipart/form-data');
 };
+

@@ -4,6 +4,8 @@ import {
   Text,
   SafeAreaView,
   ScrollView,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import {
   moderateScale,
@@ -23,7 +25,7 @@ import {getOrders, updateOrder} from '../../../services/Api';
 const parseOrderItems = orderField => {
   try {
     if (!orderField) return [];
-    if (Array.isArray(orderField)) return orderField; // already parsed
+    if (Array.isArray(orderField)) return orderField;
     if (typeof orderField === 'string') {
       const parsed = JSON.parse(orderField);
       return Array.isArray(parsed) ? parsed : [];
@@ -35,12 +37,15 @@ const parseOrderItems = orderField => {
   }
 };
 
+const STATUS_OPTIONS = [
+  {label: 'In Progress', value: 'inprogress'},
+  {label: 'Completed', value: 'completed'},
+  {label: 'Cancelled', value: 'cancelled'},
+];
+
 const ViewOrder = ({navigation}) => {
   const [data, setData] = useState([]);
 
-  // -----------------------------
-  // LOAD ORDERS
-  // -----------------------------
   const loadOrders = () => {
     getOrders()
       .then(res => {
@@ -55,21 +60,24 @@ const ViewOrder = ({navigation}) => {
     loadOrders();
   }, []);
 
-  // -----------------------------
-  // TOGGLE STATUS
-  // -----------------------------
-  const toggleStatus = orderDoc => {
-    const currentStatus = orderDoc.status || 'inprogress';
-    const nextStatus = currentStatus === 'completed' ? 'inprogress' : 'completed';
+  const sortedOrders = [...data].sort(
+    (a, b) =>
+      new Date(b.orderDateTime || b.createdAt) -
+      new Date(a.orderDateTime || a.createdAt),
+  );
 
-    updateOrder(orderDoc.id, {status: nextStatus})
+  const handleStatusChange = (orderDoc, newStatus) => {
+    const currentStatus = orderDoc.status || 'inprogress';
+    if (currentStatus === newStatus) return;
+
+    updateOrder(orderDoc.id, {status: newStatus})
       .then(() => {
         setData(prev =>
           prev.map(o =>
-            o.id === orderDoc.id ? {...o, status: nextStatus} : o,
+            o.id === orderDoc.id ? {...o, status: newStatus} : o,
           ),
         );
-        alert('Order status updated');
+        alert(`Order status set to ${newStatus}`);
       })
       .catch(err => {
         console.log('Update status error', err);
@@ -82,19 +90,23 @@ const ViewOrder = ({navigation}) => {
       <ScrollView>
         <Header icon title="View Order" onPress={() => navigation.goBack()} />
 
-        <View style={{flexDirection: 'row', alignItems: 'center', margin: 20}}>
-          <CustomText label="Note:" fontFamily={fonts.bold} />
+        <View style={styles.pageHeader}>
           <CustomText
-            label="Tap Current Status to update order status"
-            textStyle={{marginLeft: 10}}
+            label="Order Management"
+            fontFamily={fonts.bold}
+            fontSize={moderateScale(18)}
+          />
+          <CustomText
+            label="Update the status of each order as needed."
+            textStyle={{marginTop: 5}}
           />
         </View>
 
-        <View style={{marginHorizontal: 20}}>
-          {data.length === 0 ? (
+        <View style={styles.listContainer}>
+          {sortedOrders.length === 0 ? (
             <CustomText label="No orders yet" />
           ) : (
-            data.map((orderDoc, index) => {
+            sortedOrders.map((orderDoc, index) => {
               const items = parseOrderItems(orderDoc.order);
               const status = orderDoc.status || 'inprogress';
               const createdAt =
@@ -109,148 +121,105 @@ const ViewOrder = ({navigation}) => {
               }, 0);
 
               return (
-                <View
-                  key={orderDoc.id || index}
-                  style={{
-                    borderTopWidth: 1,
-                    borderColor: '#ddd',
-                    paddingTop: verticalScale(10),
-                    marginBottom: verticalScale(15),
-                  }}>
-                  {/* ORDER HEADER */}
-                  <View
-                    style={{
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      fontSize: 15,
-                    }}>
+                <View key={orderDoc.id || index} style={styles.orderCard}>
+                  {/* HEADER ROW (No delete button now) */}
+                  <View style={styles.orderHeaderRow}>
                     <CustomText
                       label={`Order ${index + 1}`}
-                      fontFamily={fonts.medium}
-                    />
-                  </View>
-
-                  {/* BASIC INFO */}
-                  <View style={{marginTop: verticalScale(10)}}>
-                    <CustomText
-                      label={`Customer: ${orderDoc.customerName || 'N/A'}`}
-                    />
-                    <CustomText
-                      label={`Table: ${orderDoc.tableRef || 'N/A'}`}
-                    />
-                    <CustomText label={`Area: ${orderDoc.area || 'N/A'}`} />
-                    <CustomText
-                      label={`Date/Time: ${createdAt}`}
-                      container={{marginBottom: verticalScale(10)}}
-                    />
-                  </View>
-
-                  {/* STATUS BUTTON */}
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      marginTop: 10,
-                      alignItems: 'center',
-                    }}>
-                    <CustomButton
-                      title="Current Status"
                       fontFamily={fonts.bold}
-                      onPress={() => toggleStatus(orderDoc)}
+                      fontSize={moderateScale(15)}
                     />
                     <CustomText
-                      label={status}
-                      textStyle={{marginLeft: scale(20)}}
+                      label={createdAt}
+                      fontSize={moderateScale(11)}
+                      color="#777"
                     />
                   </View>
 
-                  {/* LINE ITEMS */}
-                  <View style={{marginTop: verticalScale(15)}}>
+                  <View style={styles.infoBlock}>
+                    <InfoRow
+                      label="Customer"
+                      value={orderDoc.customerName || 'N/A'}
+                    />
+                    <InfoRow label="Table" value={orderDoc.tableRef || 'N/A'} />
+                    <InfoRow label="Area" value={orderDoc.area || 'N/A'} />
+                  </View>
+
+                  <View style={styles.sectionDivider} />
+
+                  <View style={{marginTop: verticalScale(8)}}>
                     {items.length === 0 ? (
                       <CustomText label="No items found for this order." />
                     ) : (
                       items.map((line, idx) => {
                         const dish = line.item || {};
                         return (
-                          <View key={dish.id || idx} style={{marginBottom: 10}}>
-                            <View
-                              style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                              }}>
-                              <CustomText
-                                label="Dish name:"
-                                fontFamily={fonts.bold}
-                              />
-                              <CustomText
-                                label={dish.name || 'Unknown'}
-                                textStyle={{marginLeft: scale(20)}}
-                              />
-                            </View>
-
-                            <View
-                              style={{
-                                flexDirection: 'row',
-                                marginTop: 5,
-                                alignItems: 'center',
-                              }}>
-                              <CustomText
-                                label="Dish Price:"
-                                fontFamily={fonts.bold}
-                              />
-                              <CustomText
-                                label={`$${dish.price || 0}`}
-                                textStyle={{marginLeft: scale(20)}}
-                              />
-                            </View>
-
-                            <View
-                              style={{
-                                flexDirection: 'row',
-                                marginTop: 5,
-                                alignItems: 'center',
-                                width: '80%',
-                              }}>
-                              <CustomText
-                                label="Dish Details:"
-                                fontFamily={fonts.bold}
-                              />
-                              <CustomText
-                                width="80%"
-                                label={dish.description || ''}
-                                textStyle={{marginLeft: scale(20)}}
-                              />
-                            </View>
+                          <View key={dish.id || idx} style={styles.itemBlock}>
+                            <CustomText
+                              label={dish.name || 'Unknown'}
+                              fontFamily={fonts.bold}
+                            />
+                            <CustomText
+                              label={`$${dish.price || 0}`}
+                              fontFamily={fonts.medium}
+                              color={colors.lightBlue}
+                              container={{marginTop: 2}}
+                            />
                           </View>
                         );
                       })
                     )}
                   </View>
 
-                  {/* TOTAL */}
-                  <View
-                    style={{
-                      paddingTop: verticalScale(20),
-                      marginTop: verticalScale(10),
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      borderTopWidth: 1,
-                      borderColor: '#ddd',
-                      justifyContent: 'center',
-                    }}>
+                  <View style={styles.sectionDivider} />
+                  <View style={styles.totalRow}>
                     <CustomText
                       label="Total Price"
                       fontFamily={fonts.bold}
                       fontSize={moderateScale(15)}
                     />
-                    <Text
-                      style={{
-                        fontFamily: fonts.medium,
-                        color: colors.lightBlue,
-                        marginLeft: 20,
-                        fontSize: moderateScale(15),
-                      }}>
-                      ${total}
-                    </Text>
+                    <Text style={styles.totalValue}>${total}</Text>
+                  </View>
+
+                  <View style={styles.statusRow}>
+                    <CustomText
+                      label="Status"
+                      fontFamily={fonts.bold}
+                      container={{marginRight: scale(10)}}
+                    />
+                    <View style={styles.statusChipsContainer}>
+                      {STATUS_OPTIONS.map(option => {
+                        const isActive = status === option.value;
+                        const isCancelled = option.value === 'cancelled';
+                        return (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={[
+                              styles.statusChip,
+                              isActive && styles.statusChipActive,
+                              isCancelled && styles.statusChipCancelled,
+                              isActive &&
+                                isCancelled &&
+                                styles.statusChipCancelledActive,
+                            ]}
+                            onPress={() =>
+                              handleStatusChange(orderDoc, option.value)
+                            }>
+                            <Text
+                              style={[
+                                styles.statusChipText,
+                                isActive && styles.statusChipTextActive,
+                                isCancelled && styles.statusChipCancelledText,
+                                isActive &&
+                                  isCancelled &&
+                                  styles.statusChipCancelledTextActive,
+                              ]}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   </View>
                 </View>
               );
@@ -262,10 +231,117 @@ const ViewOrder = ({navigation}) => {
   );
 };
 
+const InfoRow = ({label, value}) => (
+  <View style={styles.infoRow}>
+    <CustomText
+      label={`${label}:`}
+      fontFamily={fonts.medium}
+      fontSize={moderateScale(12)}
+      color="#555"
+    />
+    <CustomText
+      label={value}
+      fontSize={moderateScale(12)}
+      textStyle={{marginLeft: scale(6)}}
+    />
+  </View>
+);
+
 const styles = ScaledSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f3f5f8',
+  },
+  pageHeader: {
+    marginHorizontal: 20,
+    marginTop: 15,
+    marginBottom: 5,
+  },
+  listContainer: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  orderCard: {
     backgroundColor: colors.white,
+    borderRadius: 14,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    marginTop: verticalScale(12),
+    elevation: 3,
+  },
+  orderHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoBlock: {
+    marginTop: verticalScale(10),
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  sectionDivider: {
+    marginTop: verticalScale(10),
+    borderTopWidth: 1,
+    borderColor: '#e2e4ea',
+  },
+  itemBlock: {
+    marginTop: verticalScale(8),
+  },
+  totalRow: {
+    marginTop: verticalScale(10),
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  totalValue: {
+    fontFamily: fonts.medium,
+    color: colors.lightBlue,
+    fontSize: moderateScale(15),
+  },
+  statusRow: {
+    flexDirection: 'row',
+    marginTop: verticalScale(12),
+    alignItems: 'center',
+  },
+  statusChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    flex: 1,
+  },
+  statusChip: {
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(4),
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.lightBlue,
+    marginRight: scale(8),
+    marginBottom: verticalScale(4),
+    backgroundColor: colors.white,
+  },
+  statusChipActive: {
+    backgroundColor: colors.lightBlue,
+  },
+  statusChipCancelled: {
+    borderColor: colors.red,
+  },
+  statusChipCancelledActive: {
+    backgroundColor: colors.red,
+  },
+  statusChipText: {
+    fontFamily: fonts.medium,
+    color: colors.lightBlue,
+    fontSize: moderateScale(12),
+  },
+  statusChipTextActive: {
+    color: colors.white,
+  },
+  statusChipCancelledText: {
+    color: colors.red,
+  },
+  statusChipCancelledTextActive: {
+    color: colors.white,
   },
 });
 

@@ -1,22 +1,56 @@
-import React, { useEffect, useState, useMemo } from 'react';
+// src/screens/Reports/ViewReport/index.js
+
+import React, {useEffect, useState, useMemo} from 'react';
 import {
   View,
   SafeAreaView,
   ScrollView,
   Alert,
+  TouchableOpacity,
+  Text,
 } from 'react-native';
-import { scale, ScaledSheet, verticalScale } from 'react-native-size-matters';
+import {scale, ScaledSheet, verticalScale} from 'react-native-size-matters';
 
 import colors from '../../../util/colors';
 import Header from '../../../common/components/Header';
-import CustomButton from '../../../common/components/CustomButton';
 import CustomText from '../../../common/components/CustomText';
 import fonts from '../../../assets/fonts';
 import Icons from '../../../common/components/Icons';
 
-import { getOrders, updateOrder, deleteOrder } from '../../../services/Api';
+import {getOrders, updateOrder, deleteOrder} from '../../../services/Api';
 
-const ViewReport = ({ navigation }) => {
+const STATUS_OPTIONS = [
+  {label: 'In Progress', value: 'inprogress'},
+  {label: 'Confirmed', value: 'completed'}, // uses same backend value as "completed"
+  {label: 'Cancelled', value: 'cancelled'},
+];
+
+// Safely parse the "order" field
+const parseOrderItems = orderField => {
+  try {
+    if (!orderField) return [];
+    if (Array.isArray(orderField)) return orderField; // already parsed
+    if (typeof orderField === 'string') {
+      const parsed = JSON.parse(orderField);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+    return [];
+  } catch (e) {
+    console.log('Failed to parse order JSON:', e);
+    return [];
+  }
+};
+
+const shortId = id => (id ? id.slice(0, 6).toUpperCase() : '—');
+
+const formatDateTime = value => {
+  if (!value) return 'N/A';
+  const d = new Date(value);
+  if (isNaN(d)) return value;
+  return d.toLocaleString(); // device locale
+};
+
+const ViewReport = ({navigation}) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -25,11 +59,11 @@ const ViewReport = ({ navigation }) => {
     setLoading(true);
     getOrders()
       .then(res => {
-        // API returns an array of order objects
+        console.log('Orders fetched:', res.data);
         setOrders(res.data || []);
       })
       .catch(err => {
-        console.log('Error fetching orders:', err);
+        console.log('Error fetching orders:', err?.response?.data || err.message);
         Alert.alert('Error', 'Could not load orders.');
       })
       .finally(() => setLoading(false));
@@ -40,41 +74,64 @@ const ViewReport = ({ navigation }) => {
   }, []);
 
   // --- Summary counts for the top of the screen ---
-  const { totalOrders, inProgressCount, completedCount } = useMemo(() => {
+  const {
+    totalOrders,
+    inProgressCount,
+    completedCount,
+    cancelledCount,
+  } = useMemo(() => {
     const total = orders.length;
     const inProg = orders.filter(o => o.status === 'inprogress').length;
     const completed = orders.filter(o => o.status === 'completed').length;
+    const cancelled = orders.filter(o => o.status === 'cancelled').length;
 
     return {
       totalOrders: total,
       inProgressCount: inProg,
       completedCount: completed,
+      cancelledCount: cancelled,
     };
   }, [orders]);
 
-  // --- Toggle order status between inprogress / completed ---
-  const toggleStatus = order => {
+  // --- Change order status (inprogress / completed / cancelled) ---
+  const changeStatus = (order, newStatus) => {
     const current = order.status || 'inprogress';
-    const newStatus = current === 'inprogress' ? 'completed' : 'inprogress';
+    if (current === newStatus) {
+      return; // nothing to do if unchanged
+    }
 
-    // Optimistic UI update
+    // Ensure the "order" field is a JSON string as the backend expects
+    let orderField = order.order;
+    if (Array.isArray(orderField)) {
+      orderField = JSON.stringify(orderField);
+    }
+
+    // Optimistic local update for fast UI response
     setOrders(prev =>
       prev.map(o =>
-        o.id === order.id ? { ...o, status: newStatus } : o,
+        o.id === order.id ? {...o, status: newStatus} : o,
       ),
     );
 
-    updateOrder(order.id, { status: newStatus })
-      .then(() => {
-        console.log('Order status updated');
+    // Send update to backend
+    updateOrder(order.id, {
+      status: newStatus,
+      order: orderField, // many backends require this to be included
+    })
+      .then(res => {
+        console.log('Order status updated:', res.data);
       })
       .catch(err => {
-        console.log('Error updating order:', err);
+        console.log(
+          'Error updating order:',
+          err?.response?.data || err.message,
+        );
         Alert.alert('Error', 'Could not update order status.');
-        // revert if backend fails
+
+        // Revert UI if backend fails
         setOrders(prev =>
           prev.map(o =>
-            o.id === order.id ? { ...o, status: current } : o,
+            o.id === order.id ? {...o, status: current} : o,
           ),
         );
       });
@@ -82,7 +139,7 @@ const ViewReport = ({ navigation }) => {
 
   const confirmDelete = orderId => {
     Alert.alert('Delete', 'Do you want to delete this order?', [
-      { text: 'No', style: 'cancel' },
+      {text: 'No', style: 'cancel'},
       {
         text: 'Yes',
         onPress: () => {
@@ -91,7 +148,10 @@ const ViewReport = ({ navigation }) => {
               setOrders(prev => prev.filter(o => o.id !== orderId));
             })
             .catch(err => {
-              console.log('Error deleting order:', err);
+              console.log(
+                'Error deleting order:',
+                err?.response?.data || err.message,
+              );
               Alert.alert('Error', 'Could not delete order.');
             });
         },
@@ -108,8 +168,8 @@ const ViewReport = ({ navigation }) => {
         <View style={styles.noteRow}>
           <CustomText label="Note:" fontFamily={fonts.bold} />
           <CustomText
-            label=" Tap Current Status to update order status"
-            textStyle={{ marginLeft: 4 }}
+            label=" Tap a status chip to update the order."
+            textStyle={{marginLeft: 4}}
           />
         </View>
 
@@ -145,7 +205,7 @@ const ViewReport = ({ navigation }) => {
 
           <View style={styles.summaryBox}>
             <CustomText
-              label="Completed"
+              label="Confirmed"
               fontFamily={fonts.bold}
               fontSize={verticalScale(11)}
             />
@@ -156,6 +216,20 @@ const ViewReport = ({ navigation }) => {
               color={colors.lightBlue}
             />
           </View>
+
+          <View style={styles.summaryBox}>
+            <CustomText
+              label="Cancelled"
+              fontFamily={fonts.bold}
+              fontSize={verticalScale(11)}
+            />
+            <CustomText
+              label={String(cancelledCount)}
+              fontFamily={fonts.bold}
+              fontSize={verticalScale(16)}
+              color={colors.red || '#d9534f'}
+            />
+          </View>
         </View>
 
         <View style={styles.content}>
@@ -163,7 +237,7 @@ const ViewReport = ({ navigation }) => {
             label="Order Status"
             fontSize={verticalScale(13)}
             fontFamily={fonts.bold}
-            container={{ marginVertical: verticalScale(10) }}
+            container={{marginVertical: verticalScale(10)}}
           />
 
           {loading ? (
@@ -171,54 +245,131 @@ const ViewReport = ({ navigation }) => {
           ) : orders.length === 0 ? (
             <CustomText label="No orders found." />
           ) : (
-            orders.map((item, index) => (
-              <View key={item.id || index} style={styles.orderBlock}>
-                <View style={styles.orderHeader}>
-                  <CustomText
-                    label={`Order ${index + 1}`}
-                    fontFamily={fonts.medium}
-                  />
-                  <View style={styles.deleteIconWrapper}>
-                    <Icons
-                      family="AntDesign"
-                      name="delete"
-                      size={20}
-                      color="red"
-                      onPress={() => confirmDelete(item.id)}
+            orders.map((item, index) => {
+              const status = item.status || 'inprogress';
+              const items = parseOrderItems(item.order);
+              const itemNames = items
+                .map(line => line?.item?.name)
+                .filter(Boolean);
+              const itemsSummary =
+                itemNames.length > 0 ? itemNames.join(', ') : 'No items';
+
+              const total = items.reduce((sum, line) => {
+                const price = Number(line?.item?.price || 0);
+                const qty = Number(line?.quantity || 1);
+                return sum + price * qty;
+              }, 0);
+
+              const tableAreaLabel = `${item.area || 'N/A'} – ${
+                item.tableRef || 'N/A'
+              }`;
+
+              return (
+                <View key={item.id || index} style={styles.orderCard}>
+                  {/* Header: Order code + delete */}
+                  <View style={styles.orderHeader}>
+                    <View>
+                      <CustomText
+                        label={`Order #${shortId(item.id)}`}
+                        fontFamily={fonts.bold}
+                        fontSize={verticalScale(14)}
+                      />
+                      <CustomText
+                        label={formatDateTime(item.orderDateTime)}
+                        fontSize={verticalScale(11)}
+                        color="#777"
+                      />
+                    </View>
+                    <View style={styles.deleteIconWrapper}>
+                      <Icons
+                        family="AntDesign"
+                        name="delete"
+                        size={20}
+                        color="red"
+                        onPress={() => confirmDelete(item.id)}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Customer / location */}
+                  <View style={{marginTop: verticalScale(6)}}>
+                    <CustomText
+                      label={`Customer: ${item.customerName || 'N/A'}`}
+                      color={colors.lightBlue}
+                    />
+                    <CustomText
+                      label={`Table: ${tableAreaLabel}`}
+                      color={colors.lightBlue}
                     />
                   </View>
-                </View>
 
-                <CustomText
-                  label={`Customer: ${item.customerName || 'N/A'}`}
-                  color={colors.lightBlue}
-                />
-                <CustomText
-                  label={`Table: ${item.tableRef || 'N/A'}`}
-                  color={colors.lightBlue}
-                />
-                <CustomText
-                  label={`Area: ${item.area || 'N/A'}`}
-                  color={colors.lightBlue}
-                />
-                <CustomText
-                  label={`Date/Time: ${item.orderDateTime || 'N/A'}`}
-                  color={colors.lightBlue}
-                />
+                  {/* Items summary */}
+                  <View style={{marginTop: verticalScale(8)}}>
+                    <CustomText
+                      label="Items:"
+                      fontFamily={fonts.bold}
+                      fontSize={verticalScale(12)}
+                    />
+                    <CustomText
+                      label={itemsSummary}
+                      fontSize={verticalScale(12)}
+                      color="#555"
+                      container={{marginTop: 2}}
+                    />
+                  </View>
 
-                <View style={styles.statusRow}>
-                  <CustomButton
-                    title="Current Status"
-                    fontFamily={fonts.bold}
-                    onPress={() => toggleStatus(item)}
-                  />
-                  <CustomText
-                    label={item.status || 'inprogress'}
-                    textStyle={{ marginLeft: scale(20) }}
-                  />
+                  {/* Total */}
+                  <View style={styles.totalRow}>
+                    <CustomText
+                      label="Total:"
+                      fontFamily={fonts.bold}
+                      fontSize={verticalScale(13)}
+                    />
+                    <Text style={styles.totalValue}>${total}</Text>
+                  </View>
+
+                  {/* STATUS CHIPS */}
+                  <View style={styles.statusRow}>
+                    <CustomText
+                      label="Status:"
+                      fontFamily={fonts.bold}
+                      container={{marginRight: scale(10)}}
+                    />
+                    <View style={styles.statusChipsContainer}>
+                      {STATUS_OPTIONS.map(option => {
+                        const isActive = status === option.value;
+                        const isCancelled = option.value === 'cancelled';
+                        return (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={[
+                              styles.statusChip,
+                              isActive && styles.statusChipActive,
+                              isCancelled && styles.statusChipCancelled,
+                              isActive &&
+                                isCancelled &&
+                                styles.statusChipCancelledActive,
+                            ]}
+                            onPress={() => changeStatus(item, option.value)}>
+                            <Text
+                              style={[
+                                styles.statusChipText,
+                                isActive && styles.statusChipTextActive,
+                                isCancelled && styles.statusChipCancelledText,
+                                isActive &&
+                                  isCancelled &&
+                                  styles.statusChipCancelledTextActive,
+                              ]}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
                 </View>
-              </View>
-            ))
+              );
+            })
           )}
         </View>
       </ScrollView>
@@ -229,7 +380,7 @@ const ViewReport = ({ navigation }) => {
 const styles = ScaledSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#f3f5f8',
   },
   noteRow: {
     flexDirection: 'row',
@@ -257,26 +408,81 @@ const styles = ScaledSheet.create({
   content: {
     marginHorizontal: scale(20),
     marginTop: verticalScale(10),
+    marginBottom: verticalScale(20),
   },
-  orderBlock: {
-    borderTopWidth: 1,
-    borderColor: '#ddd',
-    paddingTop: verticalScale(10),
-    marginBottom: verticalScale(15),
+  orderCard: {
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    marginTop: verticalScale(12),
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(8),
   },
   deleteIconWrapper: {
     padding: 4,
   },
+  totalRow: {
+    marginTop: verticalScale(10),
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  totalValue: {
+    fontFamily: fonts.medium,
+    color: colors.lightBlue,
+    fontSize: verticalScale(14),
+  },
   statusRow: {
     flexDirection: 'row',
-    marginTop: verticalScale(15),
+    marginTop: verticalScale(12),
     alignItems: 'center',
+  },
+  statusChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    flex: 1,
+  },
+  statusChip: {
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(4),
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.lightBlue,
+    marginRight: scale(8),
+    marginBottom: verticalScale(4),
+    backgroundColor: colors.white,
+  },
+  statusChipActive: {
+    backgroundColor: colors.lightBlue,
+  },
+  statusChipCancelled: {
+    borderColor: colors.red || '#d9534f',
+  },
+  statusChipCancelledActive: {
+    backgroundColor: colors.red || '#d9534f',
+  },
+  statusChipText: {
+    fontFamily: fonts.medium,
+    color: colors.lightBlue,
+    fontSize: verticalScale(11),
+  },
+  statusChipTextActive: {
+    color: colors.white,
+  },
+  statusChipCancelledText: {
+    color: colors.red || '#d9534f',
+  },
+  statusChipCancelledTextActive: {
+    color: colors.white,
   },
 });
 

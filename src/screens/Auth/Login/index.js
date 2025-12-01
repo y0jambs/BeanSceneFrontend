@@ -31,10 +31,12 @@ const Login = ({ navigation }) => {
   // AUTO LOGIN IF USER ALREADY SAVED
   // ------------------------------------------------------------------
   useEffect(() => {
+    let isMounted = true;
+
     const checkStoredUser = async () => {
       try {
         const storedId = await AsyncStorage.getItem("user_id");
-        if (storedId) {
+        if (isMounted && storedId) {
           navigation.navigate("MainStack");
         }
       } catch (e) {
@@ -43,7 +45,12 @@ const Login = ({ navigation }) => {
     };
 
     checkStoredUser();
+
+    return () => {
+      isMounted = false;  // cleanup flag to prevent memory leaks
+    };
   }, [navigation]);
+
 
   // ------------------------------------------------------------------
   // VALIDATION
