@@ -93,6 +93,17 @@ const ViewReport = ({navigation}) => {
     };
   }, [orders]);
 
+  // --- Sort orders newest → oldest (by orderDateTime or createdAt) ---
+  const sortedOrders = useMemo(
+    () =>
+      [...orders].sort(
+        (a, b) =>
+          new Date(b.orderDateTime || b.createdAt) -
+          new Date(a.orderDateTime || a.createdAt),
+      ),
+    [orders],
+  );
+
   // --- Change order status (inprogress / completed / cancelled) ---
   const changeStatus = (order, newStatus) => {
     const current = order.status || 'inprogress';
@@ -242,10 +253,10 @@ const ViewReport = ({navigation}) => {
 
           {loading ? (
             <CustomText label="Loading orders..." />
-          ) : orders.length === 0 ? (
+          ) : sortedOrders.length === 0 ? (
             <CustomText label="No orders found." />
           ) : (
-            orders.map((item, index) => {
+            sortedOrders.map((item, index) => {
               const status = item.status || 'inprogress';
               const items = parseOrderItems(item.order);
               const itemNames = items

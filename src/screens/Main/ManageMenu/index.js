@@ -22,7 +22,7 @@ import fonts from "../../../assets/fonts";
 import CustomButton from "../../../common/components/CustomButton";
 import CustomInput from "../../../common/components/CustomInput";
 import DropDownPicker from "react-native-dropdown-picker";
-import { api } from "../../../util/config"; // ✅ same as PlaceOrder
+import { api } from "../../../util/config";
 
 // API
 import {
@@ -50,17 +50,18 @@ const ManageMenu = ({ navigation }) => {
   // ---------------------
   const [dishList, setDishList] = useState([]);
 
-  // align field names with backend / PlaceOrder
+  // search text for dishes
+  const [dishSearch, setDishSearch] = useState("");
+
   const [dishData, setDishData] = useState({
     name: "",
     description: "",
     price: "",
     dietary_flags: "",
-    availability: "",
-    file: null, // filename from backend
+    availability: "Available", // default new dishes to Available
+    file: null,
   });
 
-  // use category NAME (string) for consistency with PlaceOrder
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [openCatDropdown, setOpenCatDropdown] = useState(false);
 
@@ -68,7 +69,7 @@ const ManageMenu = ({ navigation }) => {
   const [dishLoader, setDishLoader] = useState(false);
 
   // ---------------------
-  // LOAD CATEGORIES
+  // LOAD DATA
   // ---------------------
   const loadCategories = () => {
     setCatLoader(true);
@@ -77,9 +78,6 @@ const ManageMenu = ({ navigation }) => {
       .finally(() => setCatLoader(false));
   };
 
-  // ---------------------
-  // LOAD DISHES
-  // ---------------------
   const loadDishes = () => {
     setDishLoader(true);
     getDish()
@@ -115,6 +113,11 @@ const ManageMenu = ({ navigation }) => {
   // ---------------------
   const handleEditCategory = () => {
     if (!editingCategoryId) return;
+
+    if (!categoryName.trim()) {
+      Alert.alert("Error", "Category name required");
+      return;
+    }
 
     editCategory(editingCategoryId, { category: categoryName })
       .then(() => {
@@ -156,7 +159,7 @@ const ManageMenu = ({ navigation }) => {
 
     const payload = {
       ...dishData,
-      category: selectedCategory, // category NAME
+      category: selectedCategory,
     };
 
     addDish(payload)
@@ -167,7 +170,7 @@ const ManageMenu = ({ navigation }) => {
           description: "",
           price: "",
           dietary_flags: "",
-          availability: "",
+          availability: "Available",
           file: null,
         });
         setSelectedCategory(null);
@@ -200,7 +203,7 @@ const ManageMenu = ({ navigation }) => {
           description: "",
           price: "",
           dietary_flags: "",
-          availability: "",
+          availability: "Available",
           file: null,
         });
         setSelectedCategory(null);
@@ -227,6 +230,19 @@ const ManageMenu = ({ navigation }) => {
     ]);
   };
 
+  // ---------------------
+  // FILTER DISHES
+  // ---------------------
+  const filteredDishes = dishList.filter((dish) => {
+    if (!dishSearch.trim()) return true;
+    const q = dishSearch.toLowerCase();
+    return (
+      dish.name?.toLowerCase().includes(q) ||
+      dish.description?.toLowerCase().includes(q) ||
+      dish.category?.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
@@ -238,11 +254,6 @@ const ManageMenu = ({ navigation }) => {
           fontSize={16}
           fontFamily={fonts.bold}
           container={{ marginLeft: scale(20), marginVertical: 20 }}
-        />
-
-        <CustomInput
-          placeholder="Search Categories"
-          containerStyle={{ marginHorizontal: scale(20) }}
         />
 
         {catLoader ? (
@@ -288,20 +299,125 @@ const ManageMenu = ({ navigation }) => {
           ))
         )}
 
-        {/* ADD CATEGORY */}
-        <View style={{ marginTop: 20 }}>
+        {/* CATEGORY NAME INPUT + ADD/UPDATE BUTTON */}
+        <View
+          style={{
+            marginTop: 20,
+            paddingHorizontal: scale(20),
+            marginBottom: 10,
+          }}
+        >
+          <CustomInput
+            withLabel="Category Name"
+            placeholder="Enter category name"
+            value={categoryName}
+            onChangeText={setCategoryName}
+          />
+
           <CustomButton
             title={editCategoryMode ? "Update Category" : "Add New Category"}
             onPress={editCategoryMode ? handleEditCategory : handleAddCategory}
             containerStyle={{
               width: "60%",
               alignSelf: "center",
+              marginTop: 10,
               marginBottom: 20,
             }}
           />
         </View>
 
-        {/* ---------------- DISH LIST ---------------- */}
+        {/* ---------------- ADD / EDIT DISH FORM (MOVED UP) ---------------- */}
+        <View style={{ marginTop: 10, paddingHorizontal: scale(20) }}>
+          <CustomText
+            label={editDishMode ? "Edit Dish" : "Add New Dish"}
+            fontSize={25}
+            fontFamily={fonts.bold}
+            container={{ marginBottom: 10 }}
+          />
+
+          <CustomInput
+            withLabel="Name"
+            placeholder="Name"
+            value={dishData.name}
+            onChangeText={(e) => setDishData({ ...dishData, name: e })}
+          />
+
+          <CustomInput
+            withLabel="Description"
+            placeholder="Description"
+            value={dishData.description}
+            onChangeText={(e) =>
+              setDishData({ ...dishData, description: e })
+            }
+          />
+
+          <CustomInput
+            withLabel="Price"
+            placeholder="Price"
+            value={dishData.price}
+            onChangeText={(e) => setDishData({ ...dishData, price: e })}
+            keyboardType="numeric"
+          />
+
+          {/* Image upload still stubbed */}
+          <CustomButton
+            title="Upload Image"
+            containerStyle={{ width: "60%", alignSelf: "center" }}
+            onPress={() =>
+              Alert.alert(
+                "Not Implemented in version 1",
+                "Image upload will be implemented in a future update."
+              )
+            }
+          />
+
+          <CustomInput
+            withLabel="Dietary Flags"
+            placeholder="Vegan, Gluten Free, etc."
+            value={dishData.dietary_flags}
+            onChangeText={(e) =>
+              setDishData({ ...dishData, dietary_flags: e })
+            }
+          />
+
+          <CustomText
+            label="Category"
+            fontFamily={fonts.medium}
+            fontSize={15}
+            color={colors.midBlue}
+            container={{ marginTop: 15 }}
+          />
+
+          <DropDownPicker
+            open={openCatDropdown}
+            value={selectedCategory}
+            items={categoryList.map((cat) => ({
+              label: cat.category,
+              value: cat.category,
+            }))}
+            setOpen={setOpenCatDropdown}
+            setValue={setSelectedCategory}
+            placeholder="Select Category"
+            style={{ marginBottom: 10 }}
+          />
+
+          <CustomInput
+            withLabel="Availability"
+            placeholder="Available / Not Available"
+            value={dishData.availability}
+            onChangeText={(e) =>
+              setDishData({ ...dishData, availability: e })
+            }
+          />
+
+          <CustomButton
+            title={editDishMode ? "Update Dish" : "Add Dish"}
+            onPress={editDishMode ? handleEditDish : handleAddDish}
+            containerStyle={{ marginTop: 20, marginBottom: 10 }}
+          />
+        </View>
+
+        {/* ---------------- DISH LIST (NOW BELOW FORM) ---------------- */}
         <CustomText
           label="All Dishes"
           fontSize={16}
@@ -311,21 +427,26 @@ const ManageMenu = ({ navigation }) => {
 
         <CustomInput
           placeholder="Search Dishes"
+          value={dishSearch}
+          onChangeText={setDishSearch}
           containerStyle={{ marginHorizontal: scale(20) }}
         />
 
         {dishLoader ? (
           <ActivityIndicator color={colors.midBlue} />
-        ) : dishList.length === 0 ? (
+        ) : filteredDishes.length === 0 ? (
           <CustomText
-            label="No dishes found"
+            label={
+              dishList.length === 0
+                ? "No dishes found"
+                : "No dishes match your search"
+            }
             color={colors.red}
             container={{ marginLeft: scale(20), marginTop: 10 }}
           />
         ) : (
-          dishList.map((dish) => (
+          filteredDishes.map((dish) => (
             <View key={dish.id} style={styles.dishCard}>
-              {/* IMAGE - now consistent with PlaceOrder */}
               {dish.file ? (
                 <Image
                   source={{ uri: `${api}/static/${dish.file}` }}
@@ -351,17 +472,22 @@ const ManageMenu = ({ navigation }) => {
                     setDishData({
                       name: dish.name,
                       description: dish.description,
-                      price: dish.price?.toString?.() ?? `${dish.price}`,
+                      price:
+                        dish.price?.toString?.() ?? `${dish.price}`,
                       dietary_flags: dish.dietary_flags ?? "",
-                      availability: dish.availability ?? "",
+                      availability: dish.availability ?? "Available",
                       file: dish.file ?? null,
                     });
-                    // category stored as name string
                     setSelectedCategory(dish.category ?? null);
                   }}
                   style={{ marginRight: 12 }}
                 >
-                  <Icons family="AntDesign" name="edit" size={18} color="red" />
+                  <Icons
+                    family="AntDesign"
+                    name="edit"
+                    size={18}
+                    color="red"
+                  />
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => handleDeleteDish(dish.id)}>
@@ -381,98 +507,25 @@ const ManageMenu = ({ navigation }) => {
                   label={`Dietary:  ${dish.dietary_flags ?? "None"}`}
                 />
                 <CustomText label={`Price:  $${dish.price}`} />
+
                 <CustomText
-                  label={`Available:  ${dish.availability ?? "Unknown"}`}
+                  label={`Available:  ${dish.availability || "Available"}`}
                 />
+
                 <CustomText
-                  label={`Category:  ${dish.category ?? "Unassigned"}`}
+                  label={`Category:  ${
+                    dish.category
+                      ? dish.category.charAt(0).toUpperCase() +
+                        dish.category.slice(1)
+                      : "Unassigned"
+                  }`}
                 />
               </View>
             </View>
           ))
         )}
 
-        {/* ---------------- ADD / EDIT DISH FORM ---------------- */}
-        <View style={{ marginTop: 20, paddingHorizontal: scale(20) }}>
-          <CustomInput
-            withLabel="Name"
-            placeholder="Name"
-            value={dishData.name}
-            onChangeText={(e) => setDishData({ ...dishData, name: e })}
-          />
-
-          <CustomInput
-            withLabel="Description"
-            placeholder="Description"
-            value={dishData.description}
-            onChangeText={(e) => setDishData({ ...dishData, description: e })}
-          />
-
-          <CustomInput
-            withLabel="Price"
-            placeholder="Price"
-            value={dishData.price}
-            onChangeText={(e) => setDishData({ ...dishData, price: e })}
-            keyboardType="numeric"
-          />
-
-          {/* UPLOAD IMAGE BUTTON (still to be wired up to picker / uploader) */}
-          <CustomButton
-            title="Upload Image"
-            containerStyle={{ width: "60%", alignSelf: "center" }}
-            onPress={() => {
-              Alert.alert(
-                "Not Implemented",
-                "Image upload not wired up yet in this screen."
-              );
-            }}
-          />
-
-          <CustomInput
-            withLabel="Dietary Flags"
-            placeholder="Vegan, Gluten Free, etc."
-            value={dishData.dietary_flags}
-            onChangeText={(e) =>
-              setDishData({ ...dishData, dietary_flags: e })
-            }
-          />
-
-          <CustomText
-            label="Category"
-            fontFamily={fonts.medium}
-            fontSize={15}
-            color={colors.midBlue}
-            container={{ marginTop: 15 }}
-          />
-
-          <DropDownPicker
-            open={openCatDropdown}
-            value={selectedCategory}
-            items={categoryList.map((cat) => ({
-              label: cat.category,
-              value: cat.category, // ✅ use name so it matches PlaceOrder filtering
-            }))}
-            setOpen={setOpenCatDropdown}
-            setValue={setSelectedCategory}
-            placeholder="Select Category"
-            style={{ marginBottom: 10 }}
-          />
-
-          <CustomInput
-            withLabel="Availability"
-            placeholder="Available / Not Available"
-            value={dishData.availability}
-            onChangeText={(e) =>
-              setDishData({ ...dishData, availability: e })
-            }
-          />
-
-          <CustomButton
-            title={editDishMode ? "Update Dish" : "Add Dish"}
-            onPress={editDishMode ? handleEditDish : handleAddDish}
-            containerStyle={{ marginTop: 20, marginBottom: 40 }}
-          />
-        </View>
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );

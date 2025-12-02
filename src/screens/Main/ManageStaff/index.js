@@ -73,7 +73,7 @@ const ManageStaff = ({ navigation }) => {
       firstname: updateData.firstname,
       lastname: updateData.lastname,
       email: updateData.email,
-      password: updateData.password,
+      password: updateData.password, // backend should hash this
       user_type: userType,
     };
 
@@ -91,9 +91,13 @@ const ManageStaff = ({ navigation }) => {
       firstname: updateData.firstname,
       lastname: updateData.lastname,
       email: updateData.email,
-      password: updateData.password,
       user_type: userType,
     };
+
+    // Only send password if user actually typed a new one
+    if (updateData.password) {
+      payload.password = updateData.password; // backend should hash this
+    }
 
     editUser(editUserId, payload)
       .then((res) => {
@@ -125,9 +129,19 @@ const ManageStaff = ({ navigation }) => {
     if (!updateData.lastname) return setError("Last name is required");
     if (!updateData.email) return setError("Email is required");
     if (!isValidEmail(updateData.email)) return setError("Invalid email");
-    if (!updateData.password || updateData.password.length < 8)
-      return setError("Password must be at least 8 characters");
     if (!userType) return setError("Please select user type");
+
+    // For ADD: password is required
+    if (!editMode) {
+      if (!updateData.password || updateData.password.length < 8) {
+        return setError("Password must be at least 8 characters");
+      }
+    } else {
+      // For EDIT: password is optional, but if present must be long enough
+      if (updateData.password && updateData.password.length < 8) {
+        return setError("Password must be at least 8 characters");
+      }
+    }
 
     setError("");
 
@@ -198,10 +212,11 @@ const ManageStaff = ({ navigation }) => {
                         item.lname ||
                         "",
                       email: item.email || "",
-                      password: item.password || "",
+                      // IMPORTANT: don't pull password from DB (hash or plain text)
+                      password: "",
                     });
 
-                    setUserType(item.user_type);
+                    setUserType(item.user_type || null);
                   }}
                 >
                   <Icons
@@ -274,7 +289,7 @@ const ManageStaff = ({ navigation }) => {
 
           <CustomInput
             withLabel="Password"
-            placeholder="Password"
+            placeholder={editMode ? "Leave blank to keep current password" : "Password"}
             secureTextEntry={!visible}
             value={updateData.password}
             onChangeText={(e) =>
